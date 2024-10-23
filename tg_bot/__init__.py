@@ -1,4 +1,3 @@
-from decimal import Decimal
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackContext
 from bot.models import Registration
@@ -7,6 +6,7 @@ from currency.models import Currency
 from constants import *
 from user.models import User
 from utils import distribute
+from decimal import Decimal, InvalidOperation
 import re
 
 # Start REPLY
@@ -122,8 +122,7 @@ class Bot:
     async def ask_currency(self, update: Update, context: CallbackContext) -> int:
         selected_currency = update.message.text
 
-        valid_currency = Currency.objects.filter(
-            name=selected_currency).first()
+        valid_currency = Currency.objects.filter(name=selected_currency).first()
 
         to_currency = ReplyKeyboardMarkup(
             currency_buttons + [[BACK]], one_time_keyboard=True, resize_keyboard=True)
@@ -133,16 +132,13 @@ class Bot:
         to_ask_phone = ReplyKeyboardMarkup([[phone_rep_btn], [KeyboardButton(
             BACK)]], one_time_keyboard=True, resize_keyboard=True)
 
-        if selected_currency == BACK and User.DoesNotExist:
-            if not User.DoesNotExist:
-                await update.message.reply_text(f"<b>Hurmatli mijoz. Siz ro'yxatdan o'tib bo'lgansiz😊\n\nO'zingizga kerak bo'lgan valyutani tanlang👇</b>", parse_mode='HTML')
-                return ASK_CURRENCY
+        if selected_currency == BACK:
             await update.message.reply_text(f"{phone_reply}", reply_markup=to_ask_phone, parse_mode='HTML')
             return ASK_PHONE
 
         if valid_currency is None or selected_currency != valid_currency.name:
             await update.message.reply_text(
-                "<b>Noto'g'ri valyuta tanladingiz. Qayta tanlang:</b>",
+                "<b>Noto'g'ri valyuta tanladingiz. Qayta tanlang 👇:</b>",
                 reply_markup=to_currency,
                 parse_mode='HTML'
             )
@@ -150,56 +146,59 @@ class Bot:
 
         context.user_data['currency'] = valid_currency
 
-        buttons = [BUY, SELL]
-        keyboard = ReplyKeyboardMarkup(
-            [buttons, [BACK]], one_time_keyboard=True, resize_keyboard=True)
-        await update.message.reply_text(f"<b>{selected_currency}ni sotish yoki sotib olish</b>", reply_markup=keyboard, parse_mode='HTML')
+        # Offer two options: currency to UZS or UZS to currency
+        buttons = [[f"{valid_currency.currency_code} → {UZS}"], [f"{UZS} → {valid_currency.currency_code}"], [BACK]]
+        keyboard = ReplyKeyboardMarkup(buttons, one_time_keyboard=True, resize_keyboard=True)
+
+        await update.message.reply_text(f"<b>{selected_currency} tanlandi\nKerakli amaliyotni tanlang👇</b>", reply_markup=keyboard, parse_mode='HTML')
 
         return SELECT_ACTION
+
 
     async def select_action(self, update: Update, context: CallbackContext) -> int:
         action = update.message.text
         currency = context.user_data['currency']
 
-        if action == BUY:
-            await update.message.reply_text(f"Siz {currency.name} sotib olmoqchisiz. Miqdorni kiriting: ")
-        elif action == SELL:
-            await update.message.reply_text(f"Siz {currency.name} sotmoqchisiz. Miqdorni kiriting:")
+        # Determine the direction of conversion
+        if f"{currency.currency_code} → {UZS}" in action:
+            context.user_data['conversion_direction'] = "to_uzs"
+            await update.message.reply_text(f"Siz {currency.currency_code} ni UZSga almashtirmoqchisiz. {currency.currency_code} miqdorni kiriting: ")
+        elif f"{UZS} → {currency.currency_code}" in action:
+            context.user_data['conversion_direction'] = "from_uzs"
+            await update.message.reply_text(f"Siz {UZS} ni {currency.currency_code} ga almashtirmoqchisiz. UZS miqdorini:")
 
-        context.user_data['action'] = action
         return ENTER_AMOUNT
 
+
     async def enter_amount(self, update: Update, context: CallbackContext) -> int:
-        amount = Decimal(update.message.text)
-        action = context.user_data['action']
+        try:
+            amount = Decimal(update.message.text)
+        except InvalidOperation:
+            await update.message.reply_text("Iltimos, to'g'ri miqdorni kiriting.")
+            return ENTER_AMOUNT
+        
+        direction = context.user_data['conversion_direction']
         currency = context.user_data['currency']
 
-        # if action == BACK:
-
-
-        if action == BUY:
-            converted_amount = Decimal(amount * currency.cb_price)
+        if direction == "to_uzs":
+            converted_amount = Decimal(amount * currency.cb_price)  # Convert currency to UZS
             await update.message.reply_text(
-                f"Siz {amount} {currency.name} sotib oldingiz. Bu {
-                    converted_amount} UZS ga teng."
+                f"Siz {amount} {currency.currency_code} ni {converted_amount} {UZS} ga almashtirdingiz."
             )
-        elif action == SELL:
-            converted_amount = Decimal(amount * currency.cb_price)
+        elif direction == "from_uzs":
+            converted_amount = Decimal(amount / currency.cb_price)  # Convert UZS to currency
             await update.message.reply_text(
-                f"Siz {amount} {currency.name} sotdingiz. Bu {
-                    converted_amount} UZS ga teng."
+                f"Siz {amount} {UZS} ni {converted_amount} {currency.currency_code} ga almashtirdingiz."
             )
 
+        # Ensure the user exists
         try:
             user = User.objects.get(chat_id=update.message.from_user.id)
         except User.DoesNotExist:
             await update.message.reply_text("Foydalanuvchi topilmadi. Iltimos, qaytadan boshlang.")
             return ConversationHandler.END
 
-        if not currency or not hasattr(currency, 'name'):
-            await update.message.reply_text("Valyuta topilmadi. Iltimos, qaytadan boshlang.")
-            return ASK_CURRENCY
-
+        # Create the conversion record if all is valid
         try:
             Conversion.objects.create(
                 user=user,
