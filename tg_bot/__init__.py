@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackContext
 from bot.models import Registration
@@ -100,7 +100,7 @@ class Bot:
             await update.message.reply_text(curency_reply, reply_markup=to_currency, parse_mode='HTML')
             return ASK_CURRENCY
 
-        await update.message.reply_text("<b>Iltimos, telefon raqamingizni ulashing yoki kiriting</b>", reply_markup=to_ask_phone, parse_mode='HTML')
+        await update.message.reply_text("<b>Iltimos, telefon raqamingizni ulashing</b>", reply_markup=to_ask_phone, parse_mode='HTML')
         return ASK_PHONE
 
     async def register_user(self, update: Update, context: CallbackContext) -> None:
@@ -110,14 +110,14 @@ class Bot:
         phone = context.user_data['phone']
 
         if User.objects.filter(phone_number=phone).exists():
-            await update.message.reply_text("Bu telefon raqami allaqachon ro'yxatdan o'tgan.")
+            await update.message.reply_text("Bu telefon raqami allaqachon ro'yxatdan o'tgan✅")
             return
 
         if not User.objects.filter(chat_id=chat_id).exists():
             User.objects.create(chat_id=chat_id, name=name, phone_number=phone)
-            await update.message.reply_text("Foydalanuvchi muvaffaqiyatli ro'yxatdan o'tkazildi.")
+            await update.message.reply_text("Foydalanuvchi muvaffaqiyatli ro'yxatdan o'tkazildi✅")
         else:
-            await update.message.reply_text("Siz allaqachon ro'yxatdan o'tgansiz.")
+            await update.message.reply_text("Siz allaqachon ro'yxatdan o'tgansiz✅")
 
     async def ask_currency(self, update: Update, context: CallbackContext) -> int:
         selected_currency = update.message.text
@@ -135,7 +135,7 @@ class Bot:
 
         if selected_currency == BACK and User.DoesNotExist:
             if not User.DoesNotExist:
-                await update.message.reply_text(f"<b>Hurmatli mijoz. Siz ro'yxatdan o'tib bo'lgansiz😊\n\nO'zingizga kerak bo'lgan valyutani tanlang👇</b>", parse_mode='HTML')
+                await update.message.reply_text(f"<b>Hurmatli mijoz. Siz ro'yxatdan o'tib bo'lgansiz✅\n\nO'zingizga kerak bo'lgan valyutani tanlang👇</b>", parse_mode='HTML')
                 return ASK_CURRENCY
             await update.message.reply_text(f"{phone_reply}", reply_markup=to_ask_phone, parse_mode='HTML')
             return ASK_PHONE
@@ -158,48 +158,64 @@ class Bot:
         return SELECT_ACTION
 
     async def select_action(self, update: Update, context: CallbackContext) -> int:
+        keyboard = ReplyKeyboardMarkup(
+            [[BACK]], one_time_keyboard=True, resize_keyboard=True)
         action = update.message.text
         currency = context.user_data['currency']
 
-        if action == BUY:
-            await update.message.reply_text(f"Siz {currency.name} sotib olmoqchisiz. Miqdorni kiriting: ")
+        if action == BACK:
+            await update.message.reply_text(curency_reply, reply_markup=ReplyKeyboardMarkup(currency_buttons + [[BACK]], one_time_keyboard=True, resize_keyboard=True), parse_mode='HTML')
+            return ASK_CURRENCY
+        elif action == BUY:
+            await update.message.reply_text(f"Siz {currency.name} sotib olmoqchisiz.\n\n💰Miqdorni kiriting: ", reply_markup=keyboard)
         elif action == SELL:
-            await update.message.reply_text(f"Siz {currency.name} sotmoqchisiz. Miqdorni kiriting:")
+            await update.message.reply_text(f"Siz {currency.name} sotmoqchisiz.\n\n💰Miqdorni kiriting:", reply_markup=keyboard)
 
         context.user_data['action'] = action
         return ENTER_AMOUNT
 
     async def enter_amount(self, update: Update, context: CallbackContext) -> int:
-        amount = Decimal(update.message.text)
+        keyboard = ReplyKeyboardMarkup(
+            [[BACK]], one_time_keyboard=True, resize_keyboard=True)
+        amount_input = update.message.text
+
+        if amount_input == BACK:
+            buttons = [BUY, SELL]
+            keyboard = ReplyKeyboardMarkup(
+                [buttons, [BACK]], one_time_keyboard=True, resize_keyboard=True)
+            await update.message.reply_text(f"<b>{context.user_data['currency'].name} ni sotish yoki sotib olishni tanlang:</b>", reply_markup=keyboard, parse_mode='HTML')
+            return SELECT_ACTION
+
+        try:
+            amount = Decimal(amount_input)
+        except InvalidOperation:
+            await update.message.reply_text("Iltimos, to'g'ri miqdorni kiriting❗️", reply_markup=keyboard)
+            return ENTER_AMOUNT
+
         action = context.user_data['action']
         currency = context.user_data['currency']
 
-        # if action == BACK:
-
-
+        # Perform the conversion
         if action == BUY:
             converted_amount = Decimal(amount * currency.cb_price)
             await update.message.reply_text(
                 f"Siz {amount} {currency.name} sotib oldingiz. Bu {
-                    converted_amount} UZS ga teng."
+                    converted_amount} UZS💰 ga teng."
             )
         elif action == SELL:
             converted_amount = Decimal(amount * currency.cb_price)
             await update.message.reply_text(
                 f"Siz {amount} {currency.name} sotdingiz. Bu {
-                    converted_amount} UZS ga teng."
+                    converted_amount} UZS💰 ga teng."
             )
 
         try:
             user = User.objects.get(chat_id=update.message.from_user.id)
         except User.DoesNotExist:
-            await update.message.reply_text("Foydalanuvchi topilmadi. Iltimos, qaytadan boshlang.")
+            await update.message.reply_text("Foydalanuvchi topilmadi. Iltimos, qaytadan boshlang❗️")
             return ConversationHandler.END
 
-        if not currency or not hasattr(currency, 'name'):
-            await update.message.reply_text("Valyuta topilmadi. Iltimos, qaytadan boshlang.")
-            return ASK_CURRENCY
-
+        # Create the conversion record if all is valid
         try:
             Conversion.objects.create(
                 user=user,
@@ -207,7 +223,7 @@ class Bot:
                 amount=amount,
                 convert_sum=converted_amount
             )
-            await update.message.reply_text("Amaliyot muvaffaqiyatli saqlandi.")
+            await update.message.reply_text("Amaliyot muvaffaqiyatli saqlandi✅")
         except Exception as e:
             await update.message.reply_text(f"Xatolik yuz berdi: {str(e)}")
             return ConversationHandler.END
