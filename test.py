@@ -1,11 +1,8 @@
-import re
-from constants import UZBEK_PHONE_REGEX
-
-phone_number = '+998907887170'
-
-is_match = re.match(UZBEK_PHONE_REGEX, phone_number)
-
-print(is_match)
 
 
 
+users = ["Shukurulloh","Sunantilla"]
+
+
+for i, user in enumerate(users,1):
+    print(i, user)

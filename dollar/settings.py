@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "currency",
     "user",
     "bot",
+    # "user_states",
 ]
 
 MIDDLEWARE = [

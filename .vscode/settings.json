@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./venv/Lib/site-packages/pandas/io/excel/_",
+        "./venv/Lib/site-packages/pandas/io/excel/_"
+    ]
+}

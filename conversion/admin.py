@@ -5,6 +5,7 @@ from .models import Conversion
 
 class ConversionAdmin(admin.ModelAdmin):
     list_display = ("user", "currency",
+                    "direction",
                     "amount", "convert_sum", "convert_date")
 
 
