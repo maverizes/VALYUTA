@@ -1,8 +1,10 @@
+import random
+import string
 from telegram.ext.filters import MessageFilter
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackContext
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackContext
 from apschedulerr import send_daily_currency_rates
 from bot.models import Registration
 from conversion.models import Conversion
@@ -36,6 +38,12 @@ main_buttons = [
 ]
 
 
+post_confirmation_button = [
+    ["✅ Postni jo'natish"],
+    ["❌ Bekor qilish"]
+]
+
+
 class Bot:
     def add_handlers(self):
         conv_handler = ConversationHandler(
@@ -52,8 +60,12 @@ class Bot:
                 ASK_ADMIN_PASSWORD: [MessageHandler(filters.TEXT & EXCLUDE, self.ask_admin_password)],
                 ADMIN_MENU_STATE: [MessageHandler(filters.TEXT & EXCLUDE, self.admin_menu)],
                 START: [MessageHandler(filters.TEXT & EXCLUDE, self.show_main_menu)],
-                POST_MESSAGE: [MessageHandler(
-                    filters.TEXT & EXCLUDE, self.handle_post)]
+                POST_MESSAGE: [MessageHandler(filters.ALL, self.handle_post)],
+                POST_CONFIRMATION: [MessageHandler(filters.TEXT & EXCLUDE, self.post_confirmation)],
+                DELETE_REFERRAL_STATE: [MessageHandler(filters.TEXT & EXCLUDE, self.confirm_delete_referral)],
+                CREATE_REFERRAL_STATE: [MessageHandler(filters.TEXT & EXCLUDE, self.create_referral)],
+                VIEW_REFERRALS: [MessageHandler(filters.TEXT & EXCLUDE, self.view_referrals)],
+                REFERRAL_MENU: [MessageHandler(filters.TEXT & EXCLUDE, self.referral_menu)],
             },
             fallbacks=[
                 CommandHandler('start', self.start),
@@ -84,6 +96,11 @@ class Bot:
             context.user_data['message_ids'] = []
         context.user_data['message_ids'].append(update.message.message_id)
 
+    def initialize_bot_data(self):
+        if 'referrals' not in self.application.bot_data:
+            self.application.bot_data['referrals'] = {}
+
+
     async def send_message(self, update: Update, context: CallbackContext, text: str, reply_markup=None):
         message = await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         if 'message_ids' not in context.user_data:
@@ -100,6 +117,11 @@ class Bot:
 
         await self.store_message_id(update, context)
 
+        referral_code = context.args[0] if context.args else None
+
+        if referral_code and referral_code in context.bot_data['referrals']:
+            context.bot_data['referrals'][referral_code]["join_count"] += 1
+
         try:
             user = User.objects.get(chat_id=context.user_data['chat_id'])
             await self.show_main_menu(update, context)
@@ -108,10 +130,9 @@ class Bot:
             if referrer_chat_id:
                 try:
                     referrer = User.objects.get(chat_id=referrer_chat_id)
-                    # Save referrer for registration
                     context.user_data['referrer'] = referrer
                 except User.DoesNotExist:
-                    context.user_data['referrer'] = None  # Referrer not found
+                    context.user_data['referrer'] = None
 
             await self.send_message(update, context, hi_reply, reply_markup=ReplyKeyboardRemove())
             return ASK_NAME
@@ -369,10 +390,10 @@ class Bot:
 
         if conversion_direction == "to_uzs":
             converted_amount = round(amount * currency.cb_price, 2)
-            await self.send_message(update, context, f"Siz {amount} {currency.name} ni {converted_amount} {UZS} ga almashtirdingiz.", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
+            await self.send_message(update, context, f"{amount} {currency.name} --> {converted_amount} {SUM}", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
         else:
             converted_amount = round(amount / currency.cb_price, 2)
-            await self.send_message(update, context, f"Siz {amount} {UZS} ni {converted_amount} {currency.name} ga almashtirdingiz.", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
+            await self.send_message(update, context, f"{amount} {SUM} {converted_amount} --> {currency.name}", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
 
         user = User.objects.get(chat_id=update.message.from_user.id)
 
@@ -380,13 +401,13 @@ class Bot:
             user=user, currency=currency, amount=amount, direction=model_direction, convert_sum=converted_amount)
 
     async def admin_start(self, update: Update, context: CallbackContext) -> int:
-        await update.message.reply_text("<b>Admin parolingizni kiriting: </b>", reply_markup=ReplyKeyboardRemove(), parse_mode='HTML')
+        await update.message.reply_text("<b>Admin loginingizni kiriting: </b>", reply_markup=ReplyKeyboardRemove(), parse_mode='HTML')
         return ASK_ADMIN_LOGIN
 
     async def ask_admin_login(self, update: Update, context: CallbackContext) -> int:
         login = update.message.text
         context.user_data['admin_login'] = login
-        await update.message.reply_text("<b>Parolingizni kriting: </b>", parse_mode='HTML')
+        await update.message.reply_text("<b>Parolingizni kiriting: </b>", parse_mode='HTML')
         return ASK_ADMIN_PASSWORD
 
     async def ask_admin_password(self, update: Update, context: CallbackContext) -> int:
@@ -397,7 +418,7 @@ class Bot:
             await update.message.reply_text(
                 "<b>✅ Parol tasdiqlandi!\n\n👤 ADMIN PANEL </b>",
                 reply_markup=ReplyKeyboardMarkup(
-                    [[BOT_STATS], [USER_STATS], [START], [POST_MESSAGE]], resize_keyboard=True),
+                    [[BOT_STATS, USER_STATS], [POST_MESSAGE], [REFERRAL_MENU], [START], ], resize_keyboard=True),
                 parse_mode='HTML'
             )
             return ADMIN_MENU_STATE
@@ -407,36 +428,153 @@ class Bot:
 
         return await self.show_main_menu(update, context)
 
+
     async def admin_menu(self, update: Update, context: CallbackContext) -> int:
         action = update.message.text
+        admin_keyboard = ReplyKeyboardMarkup(
+            [[BOT_STATS, USER_STATS],
+             [POST_MESSAGE],
+             [REFERRAL_MENU],
+             [START]],
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
+
         if action == BOT_STATS:
             await self.generate_bot_statistics(update, context)
             return ADMIN_MENU_STATE
+        elif action == REFERRAL_MENU:
+            await self.referral_menu(update, context)
+            return REFERRAL_MENU
         elif action == USER_STATS:
             await self.generate_user_statistics(update, context)
             return ADMIN_MENU_STATE
+        elif action == START:
+            await self.show_main_menu(update, context)
+            return SELECT_ACTION
         elif action == POST_MESSAGE:
             await update.message.reply_text("📤 Yangi post yuboring:", reply_markup=ReplyKeyboardMarkup([[BACK]], one_time_keyboard=True, resize_keyboard=True))
             return POST_MESSAGE
         else:
-            await update.message.reply_text("Noto'g'ri amal kiritdingiz❗️ \n\nIltimos quyidagi tugmalardan birini tanlang👇",
-                                            reply_markup=ReplyKeyboardMarkup([[BOT_STATS], [USER_STATS], [POST_MESSAGE], [BACK]], resize_keyboard=True), parse_mode='HTML')
+            await update.message.reply_text(
+                "Noto'g'ri amal kiritdingiz❗️ \n\nIltimos quyidagi tugmalardan birini tanlang👇",
+                reply_markup=admin_keyboard,
+                parse_mode='HTML'
+            )
             return ADMIN_MENU_STATE
 
+    async def referral_menu(self, update: Update, context: CallbackContext) -> int:
+        action = update.message.text
+        referral_keyboard = ReplyKeyboardMarkup(
+            [[VIEW_REFERRALS], [CREATE_REFERRAL_STATE, DELETE_REFERRAL_STATE]],
+            resize_keyboard=True, one_time_keyboard=True
+        )
+        if action == VIEW_REFERRALS:
+            await self.view_referrals(update, context)
+            return REFERRAL_MENU
+        elif action == CREATE_REFERRAL_STATE:
+            await self.create_referral(update, context)
+            return REFERRAL_MENU
+        elif action == DELETE_REFERRAL_STATE:
+            await self.delete_referral(update, context)
+            return DELETE_REFERRAL_STATE
+        else:
+            await update.message.reply_text("Kerakli amaliyotni tanlang: ", reply_markup=referral_keyboard)
+    
     async def handle_post(self, update: Update, context: CallbackContext) -> int:
-        post_content = update.message.text
+        message = update.message
 
-        all_users = User.objects.values_list('chat_id', flat=True)
+        context.user_data['pending_post'] = {
+            'chat_id': message.chat_id,
+            'message_id': message.message_id
+        }
 
-        for chat_id in all_users:
-            try:
-                await context.bot.send_message(chat_id=chat_id, text=post_content, parse_mode='HTML')
-            except Exception as e:
-                print(f"Xabarni yuborishda xatolik. Chat id: {
-                      chat_id}. Xatolik: {e}")
+        await context.bot.copy_message(
+            chat_id=message.chat_id,
+            from_chat_id=message.chat_id,
+            message_id=message.message_id
+        )
 
-        await update.message.reply_text("Xabar hamma foydalanuvchilarga  muvaffaqiyatli yuborildi❗️", parse_mode='HTML')
-        return ADMIN_MENU_STATE
+        reply_markup = ReplyKeyboardMarkup(
+            [["✅ Postni jo'natish", "❌ Bekor qilish"]],
+            one_time_keyboard=True,
+            resize_keyboard=True
+        )
+        await message.reply_text("Postni jo'natishni tasdiqlang yoki bekor qiling", reply_markup=reply_markup)
+        return POST_CONFIRMATION
+
+    async def post_confirmation(self, update: Update, context: CallbackContext) -> int:
+        user_input = update.message.text.strip()
+        pending_post = context.user_data.get('pending_post')
+
+        if user_input == "✅ Postni jo'natish" and pending_post:
+            all_users = User.objects.values_list('chat_id', flat=True)
+            for chat_id in all_users:
+                try:
+                    await context.bot.copy_message(
+                        chat_id=chat_id,
+                        from_chat_id=pending_post['chat_id'],
+                        message_id=pending_post['message_id']
+
+                    )
+                except Exception as e:
+                    print(f"Error sending message to chat id {
+                          chat_id}. Error: {e}")
+            await update.message.reply_text("Post barcha foydalanuvchilarga muvaffaqiyatli jo'natildi ✅")
+            await update.message.reply_text("💼 Admin menu", reply_markup=ReplyKeyboardMarkup([[BOT_STATS], [USER_STATS], [START], [POST_MESSAGE]], resize_keyboard=True), parse_mode='HTML')
+
+            context.user_data.pop('pending_post', None)
+            return ADMIN_MENU_STATE
+
+        elif user_input == "❌ Bekor qilish":
+            await update.message.reply_text("Postni jo'natish bekor qilindi ❌", )
+            await update.message.reply_text("💼 Admin menu", reply_markup=ReplyKeyboardMarkup([[BOT_STATS], [USER_STATS], [START], [POST_MESSAGE]], resize_keyboard=True), parse_mode='HTML')
+            context.user_data.pop('pending_post', None)
+            return ADMIN_MENU_STATE
+
+        else:
+            await update.message.reply_text("Iltimos, ✅ Postni jo'natish yoki ❌ Bekor qilish dan birini tanlang.")
+            return POST_CONFIRMATION
+
+    async def create_referral(self, update: Update, context: CallbackContext):
+        self.initialize_bot_data()
+
+        referral_code = ''.join(random.choices(
+            string.ascii_uppercase + string.digits, k=6))
+
+        context.bot_data['referrals'][referral_code] = {
+            "join_count": 0
+        }
+
+        await update.message.reply_text(f"New referral code created: {referral_code}")
+        return REFERRAL_MENU
+
+
+    async def view_referrals(self, update: Update, context: CallbackContext):
+        if not context.bot_data.get('referrals'):
+            await update.message.reply_text("No active referrals.")
+            return REFERRAL_MENU
+
+        message = "<b>Referallar:</b>\n"
+        for code, data in context.bot_data['referrals'].items():
+            message += f"Kod: {code} - Qo'shilgan foydalanuvchilar soni : {
+                data['join_count']}\n"
+
+        await update.message.reply_text(message, parse_mode="HTML")
+        return REFERRAL_MENU
+
+    async def delete_referral(self, update: Update, context: CallbackContext):
+        await update.message.reply_text("Referral kodni kiriting:")
+        return DELETE_REFERRAL_STATE
+
+    async def confirm_delete_referral(self, update: Update, context: CallbackContext) -> int:
+        referral_code = update.message.text.strip()
+        if referral_code in context.bot_data['referrals']:
+            del context.bot_data['referrals'][referral_code]
+            await update.message.reply_text(f"Referral code {referral_code} deleted.")
+        else:
+            await update.message.reply_text("Referral code not found.")
+        return REFERRAL_MENU
 
     async def generate_bot_statistics(self, update: Update, context: CallbackContext):
         total_users = User.objects.count()
@@ -466,7 +604,7 @@ class Bot:
             user_conversions = conversions.filter(user=user)
             for j, conv in enumerate(user_conversions, 1):
                 data.append({
-                    "ID": auto_increment_id if j == 1 else "",  # Use the auto-increment ID here
+                    "ID": auto_increment_id if j == 1 else "",
                     "Ism": user.name if j == 1 else "",
                     "username": (f"@{user.username}" if user.username else "N/A") if j == 1 else "",
                     "user_chat_id": user.chat_id if j == 1 else "",
@@ -478,7 +616,7 @@ class Bot:
                     "Kurs narxi": conv.currency.cb_price,
                     "Miqdori": conv.amount,
                     "Jami summa": conv.convert_sum,
-                    "date_of_conversion": conv.convert_date.strftime("%d.%m.%Y %H:%M:%S"),
+                    "almashinuv vaqti": conv.convert_date.strftime("%d.%m.%Y %H:%M:%S"),
                 })
                 auto_increment_id += 1
 
@@ -486,7 +624,8 @@ class Bot:
 
         output = BytesIO()
         writer = pd.ExcelWriter(output, engine='xlsxwriter')
-        df.to_excel(writer, index=False, sheet_name='User Statistics')
+        df.to_excel(writer, index=False,
+                    sheet_name='Foydalanuvchilar statistikasi')
 
         writer.close()
         output.seek(0)
@@ -494,8 +633,7 @@ class Bot:
         await context.bot.send_document(
             chat_id=update.message.chat_id,
             document=output,
-            filename="all_users_statistics.xlsx",
-            caption="Here is the user statistics report."
+            filename="foydalanuvchilar_statistikasi.xlsx",
         )
 
     def run(self):
