@@ -1,9 +1,6 @@
-<<<<<<< HEAD
 from telegram.ext.filters import MessageFilter
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
-=======
->>>>>>> f107077e8e955be8bef62d2acb618402547cbd0e
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackContext
 from apschedulerr import send_daily_currency_rates
@@ -18,7 +15,6 @@ from datetime import datetime, time
 import pandas as pd
 from django.db.models import Count
 from utils import distribute
-from decimal import Decimal, InvalidOperation
 import re
 
 from telegram.ext import PicklePersistence
@@ -245,54 +241,13 @@ class Bot:
             await asyncio.sleep(2)
             await self.show_main_menu(update, context)
         else:
-<<<<<<< HEAD
             await self.send_message(update, context, "Siz allaqachon ro'yxatdan o'tgansiz✅")
             await self.show_main_menu(update, context)
-=======
-            await update.message.reply_text("Siz allaqachon ro'yxatdan o'tgansiz.")
-
-    async def ask_currency(self, update: Update, context: CallbackContext) -> int:
-        selected_currency = update.message.text
-
-        valid_currency = Currency.objects.filter(name=selected_currency).first()
-
-        to_currency = ReplyKeyboardMarkup(
-            currency_buttons + [[BACK]], one_time_keyboard=True, resize_keyboard=True)
-
-        phone_rep_btn = KeyboardButton(
-            text="Telefon raqamni ulashish 📞", request_contact=True)
-        to_ask_phone = ReplyKeyboardMarkup([[phone_rep_btn], [KeyboardButton(
-            BACK)]], one_time_keyboard=True, resize_keyboard=True)
-
-        if selected_currency == BACK:
-            await update.message.reply_text(f"{phone_reply}", reply_markup=to_ask_phone, parse_mode='HTML')
-            return ASK_PHONE
-
-        if valid_currency is None or selected_currency != valid_currency.name:
-            await update.message.reply_text(
-                "<b>Noto'g'ri valyuta tanladingiz. Qayta tanlang 👇:</b>",
-                reply_markup=to_currency,
-                parse_mode='HTML'
-            )
-            return ASK_CURRENCY
-
-        context.user_data['currency'] = valid_currency
-
-        # Offer two options: currency to UZS or UZS to currency
-        buttons = [[f"{valid_currency.currency_code} → {UZS}"], [f"{UZS} → {valid_currency.currency_code}"], [BACK]]
-        keyboard = ReplyKeyboardMarkup(buttons, one_time_keyboard=True, resize_keyboard=True)
-
-        await update.message.reply_text(f"<b>{selected_currency} tanlandi\nKerakli amaliyotni tanlang👇</b>", reply_markup=keyboard, parse_mode='HTML')
-
-        return SELECT_ACTION
->>>>>>> f107077e8e955be8bef62d2acb618402547cbd0e
-
 
     async def select_action(self, update: Update, context: CallbackContext) -> int:
         await self.store_message_id(update, context)
         action = update.message.text
 
-<<<<<<< HEAD
         if action == '/start':
             return await self.start(update, context)
 
@@ -380,21 +335,8 @@ class Bot:
                 [[BACK]] + currency_buttons, one_time_keyboard=True, resize_keyboard=True)
             await self.send_message(update, context, "<b>Boshqa valyutalarni tanlang:</b>", reply_markup=keyboard)
             return SELECT_ACTION
-=======
-        # Determine the direction of conversion
-        if f"{currency.currency_code} → {UZS}" in action:
-            context.user_data['conversion_direction'] = "to_uzs"
-            await update.message.reply_text(f"Siz {currency.currency_code} ni UZSga almashtirmoqchisiz. {currency.currency_code} miqdorni kiriting: ")
-        elif f"{UZS} → {currency.currency_code}" in action:
-            context.user_data['conversion_direction'] = "from_uzs"
-            await update.message.reply_text(f"Siz {UZS} ni {currency.currency_code} ga almashtirmoqchisiz. UZS miqdorini:")
-
-        return ENTER_AMOUNT
->>>>>>> f107077e8e955be8bef62d2acb618402547cbd0e
-
 
     async def enter_amount(self, update: Update, context: CallbackContext) -> int:
-<<<<<<< HEAD
         if update.message.text == '/start':
             return await self.start(update, context)
 
@@ -418,26 +360,16 @@ class Bot:
             await self.send_message(update, context, "Iltimos, to'g'ri miqdorni kiriting.", ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
             return ENTER_AMOUNT
 
-=======
-        try:
-            amount = Decimal(update.message.text)
-        except InvalidOperation:
-            await update.message.reply_text("Iltimos, to'g'ri miqdorni kiriting.")
-            return ENTER_AMOUNT
-        
-        direction = context.user_data['conversion_direction']
->>>>>>> f107077e8e955be8bef62d2acb618402547cbd0e
         currency = context.user_data['currency']
         conversion_direction = context.user_data.get('conversion_direction')
 
-<<<<<<< HEAD
         if conversion_direction not in ["to_uzs", "from_uzs"]:
             await self.send_message(update, context, "Xato: yo'nalish noto'g'ri belgilangan.")
             return ENTER_AMOUNT
 
         model_direction = "TO_UZS" if conversion_direction == "to_uzs" else "FROM_UZS"
+
         if conversion_direction == "to_uzs":
-            ic(amount, currency.cb_price, amount * currency.cb_price)
             converted_amount = round(amount * currency.cb_price, 2)
             await self.send_message(update, context, f"Siz {amount} {currency.name} ni {converted_amount} {UZS} ga almashtirdingiz.", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
         else:
@@ -469,22 +401,10 @@ class Bot:
                 reply_markup=ReplyKeyboardMarkup(
                     [[BOT_STATS], [USER_STATS], [START], [POST_MESSAGE]], resize_keyboard=True),
                 parse_mode='HTML'
-=======
-        if direction == "to_uzs":
-            converted_amount = Decimal(amount * currency.cb_price)  # Convert currency to UZS
-            await update.message.reply_text(
-                f"Siz {amount} {currency.currency_code} ni {converted_amount} {UZS} ga almashtirdingiz."
-            )
-        elif direction == "from_uzs":
-            converted_amount = Decimal(amount / currency.cb_price)  # Convert UZS to currency
-            await update.message.reply_text(
-                f"Siz {amount} {UZS} ni {converted_amount} {currency.currency_code} ga almashtirdingiz."
->>>>>>> f107077e8e955be8bef62d2acb618402547cbd0e
             )
             return ADMIN_MENU_STATE
         await update.message.reply_text("<b>❌ Login yoki parol noto'g'ri. Qayta urinib ko'ring</b>", parse_mode='HTML')
 
-<<<<<<< HEAD
         wrong_password_message = await update.message.reply_text("<b>Asosiy menyuga o'tilmoqda...</b>", parse_mode='HTML')
 
         return await self.show_main_menu(update, context)
@@ -504,27 +424,6 @@ class Bot:
             await update.message.reply_text("Noto'g'ri amal kiritdingiz❗️ \n\nIltimos quyidagi tugmalardan birini tanlang👇",
                                             reply_markup=ReplyKeyboardMarkup([[BOT_STATS], [USER_STATS], [POST_MESSAGE], [BACK]], resize_keyboard=True), parse_mode='HTML')
             return ADMIN_MENU_STATE
-=======
-        # Ensure the user exists
-        try:
-            user = User.objects.get(chat_id=update.message.from_user.id)
-        except User.DoesNotExist:
-            await update.message.reply_text("Foydalanuvchi topilmadi. Iltimos, qaytadan boshlang.")
-            return ConversationHandler.END
-
-        # Create the conversion record if all is valid
-        try:
-            Conversion.objects.create(
-                user=user,
-                currency=currency,
-                amount=amount,
-                convert_sum=converted_amount
-            )
-            await update.message.reply_text("Amaliyot muvaffaqiyatli saqlandi.")
-        except Exception as e:
-            await update.message.reply_text(f"Xatolik yuz berdi: {str(e)}")
-            return ConversationHandler.END
->>>>>>> f107077e8e955be8bef62d2acb618402547cbd0e
 
     async def handle_post(self, update: Update, context: CallbackContext) -> int:
         post_content = update.message.text

@@ -11,22 +11,12 @@ POST_MESSAGE="📤 Post yuborish"
 SELECT_ACTION="SELECT_ACTION"
 ENTER_AMOUNT="ENTER_AMOUNT"
 
-<<<<<<< HEAD
 BACK="Orqaga qaytish↩️"
 
 UZBEK_PHONE_REGEX = r"^(\+998|998)[0-9]{9}$"
 
 SHOW_OTHER_CURRENCIES="💸Boshqa valyutalar"
 SHOW="SHOW"
-=======
-BACK="↩️Orqaga"
-
-UZBEK_PHONE_REGEX = r"^(\+998|998)[0-9]{9}$"
-
-UZS="🇺🇿UZS "
-
-BUY="Sotib olish💰"
->>>>>>> f107077e8e955be8bef62d2acb618402547cbd0e
 SELL="Sotish💵"
 
 BUY="Sotib olish💰"
