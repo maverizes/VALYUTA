@@ -24,11 +24,9 @@ from icecream import ic
 
 
 # Start REPLY
-hi_reply = str("<b>Assalomu alaykum 😊\n\nIltimos ismingizni kiriting 👇</b>")
-phone_reply = str(
-    "<b>Hurmatli mijoz telefon raqamingizni jo'nating yoki pastdagi tugmani bosing📱</b>")
-wrong_format_exception = str(
-    "<b>Noto'g'ri formatdagi telefon raqam jo'natdingiz❗️\nTelefon raqam quyidagicha ko'rinishda bo'lishi kerak👇\n\n+998 xxx xxx xxx\n 998 xxx xxx xxx</b>")
+hi_reply = "<b>Assalomu alaykum 😊\n\nIltimos ismingizni kiriting 👇</b>"
+phone_reply = "<b>Hurmatli mijoz telefon raqamingizni jo'nating yoki pastdagi tugmani bosing📱</b>"
+wrong_format_exception = "<b>Noto'g'ri formatdagi telefon raqam jo'natdingiz❗️\nTelefon raqam quyidagicha ko'rinishda bo'lishi kerak👇\n\n+998 xxx xxx xxx\n 998 xxx xxx xxx</b>"
 
 # Main menu buttons
 main_buttons = [
@@ -77,9 +75,9 @@ class Bot:
         self.add_handlers()
 
         daily_time = time(hour=8, minute=0)
-        self.application.job_queue.run_daily(
-            send_daily_currency_rates, time=daily_time
-        )
+        # self.application.job_queue.run_daily(
+        #     send_daily_currency_rates, time=daily_time
+        # )
 
     async def store_message_id(self, update: Update, context: CallbackContext):
         if 'message_ids' not in context.user_data:
