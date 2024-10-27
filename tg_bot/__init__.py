@@ -393,7 +393,7 @@ class Bot:
 
         if conversion_direction == "to_uzs":
             converted_amount = round(amount * currency.cb_price, 2)
-            await self.send_message(update, context, f"{amount} {currency.name} ➡️ {converted_amount} {SUM} 🇺🇿", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
+            await self.send_message(update, context, f"{amount} {currency.name} ➡️ {converted_amount} {SUM} 🇺🇿".lower(), reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
         else:
             converted_amount = round(amount / currency.cb_price, 2)
             await self.send_message(update, context, f"{amount} {SUM} 🇺🇿  ➡️ {converted_amount} {currency.name}", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
