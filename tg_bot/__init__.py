@@ -100,7 +100,6 @@ class Bot:
         if 'referrals' not in self.application.bot_data:
             self.application.bot_data['referrals'] = {}
 
-
     async def send_message(self, update: Update, context: CallbackContext, text: str, reply_markup=None):
         message = await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         if 'message_ids' not in context.user_data:
@@ -319,6 +318,10 @@ class Bot:
                                         reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
 
             return ENTER_AMOUNT
+        
+        elif chosen_currency == BACK:
+            await self.select_action
+            return SELECT_ACTION
 
         else:
             await self.send_message(update, context, "<b>Kerakli valyutani tanlang❗️</b>", reply_markup=ReplyKeyboardMarkup([[BACK]], one_time_keyboard=True, resize_keyboard=True))
@@ -390,10 +393,10 @@ class Bot:
 
         if conversion_direction == "to_uzs":
             converted_amount = round(amount * currency.cb_price, 2)
-            await self.send_message(update, context, f"{amount} {currency.name} --> {converted_amount} {SUM}", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
+            await self.send_message(update, context, f"{amount} {currency.name} ➡️ {converted_amount} {SUM}", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
         else:
             converted_amount = round(amount / currency.cb_price, 2)
-            await self.send_message(update, context, f"{amount} {SUM} {converted_amount} --> {currency.name}", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
+            await self.send_message(update, context, f"{amount} {SUM}  ➡️ {converted_amount} {currency.name}", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
 
         user = User.objects.get(chat_id=update.message.from_user.id)
 
@@ -427,7 +430,6 @@ class Bot:
         wrong_password_message = await update.message.reply_text("<b>Asosiy menyuga o'tilmoqda...</b>", parse_mode='HTML')
 
         return await self.show_main_menu(update, context)
-
 
     async def admin_menu(self, update: Update, context: CallbackContext) -> int:
         action = update.message.text
@@ -480,7 +482,7 @@ class Bot:
             return DELETE_REFERRAL_STATE
         else:
             await update.message.reply_text("Kerakli amaliyotni tanlang: ", reply_markup=referral_keyboard)
-    
+
     async def handle_post(self, update: Update, context: CallbackContext) -> int:
         message = update.message
 
@@ -548,7 +550,6 @@ class Bot:
 
         await update.message.reply_text(f"New referral code created: {referral_code}")
         return REFERRAL_MENU
-
 
     async def view_referrals(self, update: Update, context: CallbackContext):
         if not context.bot_data.get('referrals'):
