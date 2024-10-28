@@ -383,25 +383,10 @@ class Bot:
             name__in=[USD, RUB, EUR]).values_list('name', flat=True)
         currency_buttons = distribute(list(other_currencies), chunk_size=2)
 
-        chosen_currency = Currency.objects.filter(
-            name=update.message.text).first()
-
-        if chosen_currency:
-            context.user_data['currency'] = chosen_currency.id
-            conversion_buttons = [
-                [f"{chosen_currency.name} → {UZS}"],
-                [f"{UZS} → {chosen_currency.name}"],
-                [BACK]
-            ]
-            keyboard = ReplyKeyboardMarkup(
-                conversion_buttons, one_time_keyboard=True, resize_keyboard=True)
-            await self.send_message(update, context, f"<b>{chosen_currency.name} valyutasini tanladingiz. Kerakli amaliyotni tanlang:</b>", reply_markup=keyboard)
-            return SELECT_ACTION
-        else:
-            keyboard = ReplyKeyboardMarkup(
-                [[BACK]] + currency_buttons, one_time_keyboard=True, resize_keyboard=True)
-            await self.send_message(update, context, "<b>Boshqa valyutalarni tanlang:</b>", reply_markup=keyboard)
-            return SELECT_ACTION
+        keyboard = ReplyKeyboardMarkup(
+            [[BACK]] + currency_buttons, one_time_keyboard=True, resize_keyboard=True)
+        await self.send_message(update, context, "<b>Boshqa valyutalarni tanlang:</b>", reply_markup=keyboard)
+        return SELECT_CURRENCY
 
     async def enter_amount(self, update: Update, context: CallbackContext) -> int:
         if update.message.text == '/start':
