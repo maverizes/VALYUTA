@@ -310,7 +310,7 @@ class Bot:
 
         chosen_currency = Currency.objects.filter(name=action).first()
 
-        ic(chosen_currency)
+        ic(chosen_currency, action)
 
         if chosen_currency:
             context.user_data['currency'] = chosen_currency
