@@ -200,8 +200,7 @@ class Bot:
             f"\n{EUR}ning bugungi narxi: {eur_price} {SUM}"
         )
 
-        keyboard = ReplyKeyboardMarkup(
-            ReplyKeyboardMarkup([
+        keyboard = ReplyKeyboardMarkup([
                 [
                     usd_currency.name,
                     rub_currency.name
@@ -209,7 +208,7 @@ class Bot:
                 [
                     eur_currency.name
                 ]
-            ]), one_time_keyboard=True, resize_keyboard=True
+            ], one_time_keyboard=True, resize_keyboard=True
         )
 
         user = User.objects.get(chat_id=update.message.from_user.id)
