@@ -53,7 +53,7 @@ def sync_currencies():
 
         for item in currency_data:
             code = item.get("code")
-            cb_price = item.get("cb_price")
+            cb_price = item.get("")
             name = item.get("title")
 
             if code and cb_price:
