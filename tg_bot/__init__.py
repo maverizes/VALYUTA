@@ -808,7 +808,8 @@ class Bot:
     async def back_from_amount(self, update: Update, context: CallbackContext):
 
         chosen_currency = Currency.objects.filter(
-            name=update.message.text).first()
+            name=context.user_data['currency']).first()
+        
 
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         currency_info_message = (
