@@ -355,7 +355,7 @@ class Bot:
             else:
                 context.user_data['conversion_direction'] = "from_uzs"
 
-            chosen_currency = context.user_data.get('currency')
+            chosen_currency = Currency.objects.filter(id=context.user_data.get('currency')).first()
             conversion_direction = context.user_data.get(
                 'conversion_direction')
 
