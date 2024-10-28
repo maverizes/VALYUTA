@@ -207,6 +207,9 @@ class Bot:
                 ],
                 [
                     eur_currency.name
+                ],
+                [
+                    SHOW_OTHER_CURRENCIES
                 ]
             ], one_time_keyboard=True, resize_keyboard=True
         )
