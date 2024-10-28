@@ -58,9 +58,12 @@ class Bot:
                 ASK_NAME: [MessageHandler(filters.TEXT & EXCLUDE, self.ask_name),
                            MessageHandler(filters.ALL & EXCLUDE, self.ask_name_wrong)],
                 ASK_PHONE: [MessageHandler(filters.TEXT | filters.CONTACT, self.ask_phone), self.back(self.start)],
-                SELECT_ACTION: [MessageHandler(filters.TEXT & EXCLUDE, self.select_action),
-                                self.back(self.start)],
-                ENTER_AMOUNT: [MessageHandler(filters.TEXT & EXCLUDE, self.enter_amount),self.back(self.start)],
+                SELECT_ACTION: [
+                    MessageHandler(filters.Text(
+                        [SHOW_OTHER_CURRENCIES]), self.show_other_currencies),
+                    MessageHandler(filters.TEXT & EXCLUDE, self.select_action),
+                    self.back(self.start)],
+                ENTER_AMOUNT: [MessageHandler(filters.TEXT & EXCLUDE, self.enter_amount), self.back(self.start)],
                 SHOW_OTHER_CURRENCIES: [
                     MessageHandler(filters.TEXT & EXCLUDE,
                                    self.show_other_currencies),
@@ -301,15 +304,13 @@ class Bot:
         await self.store_message_id(update, context)
         action = update.message.text
 
-        if action == SHOW_OTHER_CURRENCIES:
-            await self.show_other_currencies(update, context)
-            return SHOW_OTHER_CURRENCIES
-
-        if action == BACK:
-            await self.show_main_menu(update, context)
-            return SELECT_ACTION
+        # if action == SHOW_OTHER_CURRENCIES:
+        #     await self.show_other_currencies(update, context)
+        #     return SHOW_OTHER_CURRENCIES
 
         chosen_currency = Currency.objects.filter(name=action).first()
+
+        ic(chosen_currency)
 
         if chosen_currency:
             context.user_data['currency'] = chosen_currency
