@@ -321,7 +321,7 @@ class Bot:
         chosen_currency = Currency.objects.filter(
             name=update.message.text).first()
 
-        context.user_data['currency'] = chosen_currency
+        context.user_data['currency'] = chosen_currency.id
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         currency_info_message = (
             f"<b>🌍{current_time} vaqtiga ko'ra hozir\n\n"
@@ -375,19 +375,6 @@ class Bot:
     async def show_other_currencies(self, update: Update, context: CallbackContext) -> int:
         await self.store_message_id(update, context)
 
-        if update.message.text == BACK:
-            # await self.show_main_menu(update, context)
-            chosen_currency = context.user_data['currency']
-
-            conversion_buttons = [
-                [f"{chosen_currency.name} → {UZS}"],
-                [f"{UZS} → {chosen_currency.name}"],
-                [BACK]
-            ]
-            keyboard = ReplyKeyboardMarkup(
-                conversion_buttons, one_time_keyboard=True, resize_keyboard=True)
-            await self.send_message(update, context, f"<b>{chosen_currency.name} valyutasini tanladingiz. Kerakli amaliyotni tanlang:</b>", reply_markup=keyboard)
-            return SELECT_ACTION
         # return SHOW_OTHER_CURRENCIES
 
         other_currencies = Currency.objects.exclude(
@@ -398,7 +385,7 @@ class Bot:
             name=update.message.text).first()
 
         if chosen_currency:
-            context.user_data['currency'] = chosen_currency
+            context.user_data['currency'] = chosen_currency.id
             conversion_buttons = [
                 [f"{chosen_currency.name} → {UZS}"],
                 [f"{UZS} → {chosen_currency.name}"],
@@ -418,17 +405,6 @@ class Bot:
         if update.message.text == '/start':
             return await self.start(update, context)
 
-        if update.message.text == BACK:
-            chosen_currency = context.user_data['currency']
-            conversion_buttons = [
-                [f"{chosen_currency.name} → {UZS}"],
-                [f"{UZS} → {chosen_currency.name}"],
-                [BACK]
-            ]
-            keyboard = ReplyKeyboardMarkup(
-                conversion_buttons, one_time_keyboard=True, resize_keyboard=True)
-            await self.send_message(update, context, f"<b>{chosen_currency.name} valyutasini tanladingiz. Kerakli amaliyotni tanlang:</b>", reply_markup=keyboard)
-            return SELECT_ACTION
 
         await self.store_message_id(update, context)
 
@@ -438,7 +414,7 @@ class Bot:
             await self.send_message(update, context, "Iltimos, to'g'ri miqdorni kiriting.", ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
             return ENTER_AMOUNT
 
-        currency = context.user_data['currency']
+        currency = Currency.objects.filter(id=context.user_data['currency']).first()
         conversion_direction = context.user_data.get('conversion_direction')
 
         if conversion_direction not in ["to_uzs", "from_uzs"]:
