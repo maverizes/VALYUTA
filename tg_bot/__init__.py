@@ -62,7 +62,7 @@ class Bot:
                     MessageHandler(filters.Text(
                         [SHOW_OTHER_CURRENCIES]), self.show_other_currencies),
                     MessageHandler(filters.TEXT & EXCLUDE, self.select_action),
-                    self.back(self.start)],
+                    self.back(self.show_other_currencies)],
                 ENTER_AMOUNT: [MessageHandler(filters.TEXT & EXCLUDE, self.enter_amount), self.back(self.start)],
                 SHOW_OTHER_CURRENCIES: [
                     MessageHandler(filters.TEXT & EXCLUDE,
@@ -373,8 +373,18 @@ class Bot:
     async def show_other_currencies(self, update: Update, context: CallbackContext) -> int:
         await self.store_message_id(update, context)
 
-        # if update.message.text == BACK:
-        # await self.show_main_menu(update, context)
+        if update.message.text == BACK:
+            # await self.show_main_menu(update, context)
+            chosen_currency = context.user_data['currency']
+            conversion_buttons = [
+                [f"{chosen_currency.name} → {UZS}"],
+                [f"{UZS} → {chosen_currency.name}"],
+                [BACK]
+            ]
+            keyboard = ReplyKeyboardMarkup(
+                conversion_buttons, one_time_keyboard=True, resize_keyboard=True)
+            await self.send_message(update, context, f"<b>{chosen_currency.name} valyutasini tanladingiz. Kerakli amaliyotni tanlang:</b>", reply_markup=keyboard)
+            return SELECT_ACTION
         # return SHOW_OTHER_CURRENCIES
 
         other_currencies = Currency.objects.exclude(
