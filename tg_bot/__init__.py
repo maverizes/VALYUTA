@@ -5,11 +5,12 @@ from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, filters, ConversationHandler, CallbackContext
-from apschedulerr import send_daily_currency_rates
+from apschedulerr import send_daily_currency_rates, sync_currencies
 from bot.models import Registration
 from conversion.models import Conversion
 from currency.models import Currency
 from constants import *
+from referral.models import Referral
 from tg_bot.exclude import EXCLUDE
 from user.models import User
 import asyncio
@@ -24,6 +25,10 @@ from telegram.ext import PicklePersistence
 
 from icecream import ic
 
+
+ic.configureOutput(
+    includeContext=True, contextAbsPath=True
+)
 
 # Start REPLY
 hi_reply = "<b>Assalomu alaykum 😊\n\nIltimos ismingizni kiriting 👇</b>"
@@ -51,21 +56,42 @@ class Bot:
                 'admin', self.admin_start)],
             states={
                 ASK_NAME: [MessageHandler(filters.TEXT & EXCLUDE, self.ask_name),
-                           MessageHandler(filters.ALL, self.ask_name_wrong)],
+                           MessageHandler(filters.ALL & EXCLUDE, self.ask_name_wrong)],
                 ASK_PHONE: [MessageHandler(filters.TEXT | filters.CONTACT, self.ask_phone)],
                 SELECT_ACTION: [MessageHandler(filters.TEXT & EXCLUDE, self.select_action)],
                 ENTER_AMOUNT: [MessageHandler(filters.TEXT & EXCLUDE, self.enter_amount)],
-                SHOW_OTHER_CURRENCIES: [MessageHandler(filters.TEXT & EXCLUDE, self.show_other_currencies)],
+                SHOW_OTHER_CURRENCIES: [
+                    MessageHandler(filters.TEXT & EXCLUDE, self.show_other_currencies),
+                    MessageHandler(filters.Text([BACK]),self.start)
+                    ],
                 ASK_ADMIN_LOGIN: [MessageHandler(filters.TEXT & EXCLUDE, self.ask_admin_login)],
                 ASK_ADMIN_PASSWORD: [MessageHandler(filters.TEXT & EXCLUDE, self.ask_admin_password)],
                 ADMIN_MENU_STATE: [MessageHandler(filters.TEXT & EXCLUDE, self.admin_menu)],
                 START: [MessageHandler(filters.TEXT & EXCLUDE, self.show_main_menu)],
                 POST_MESSAGE: [MessageHandler(filters.ALL, self.handle_post)],
                 POST_CONFIRMATION: [MessageHandler(filters.TEXT & EXCLUDE, self.post_confirmation)],
-                DELETE_REFERRAL_STATE: [MessageHandler(filters.TEXT & EXCLUDE, self.confirm_delete_referral)],
-                CREATE_REFERRAL_STATE: [MessageHandler(filters.TEXT & EXCLUDE, self.create_referral)],
-                VIEW_REFERRALS: [MessageHandler(filters.TEXT & EXCLUDE, self.view_referrals)],
-                REFERRAL_MENU: [MessageHandler(filters.TEXT & EXCLUDE, self.referral_menu)],
+                DELETE_REFERRAL_STATE: [
+                    MessageHandler(filters.TEXT & EXCLUDE,
+                                   self.delete_referral),
+                ],
+                REFERRAL_OPTIONS: [
+                    MessageHandler(filters.Text(
+                        [DELETE_REFERRAL_STATE]), self.delete_referral),
+                    MessageHandler(filters.Text([BACK]), self.referral_menu)
+                ],
+                REFERRAL_CREATE_NAME: [MessageHandler(filters.TEXT & EXCLUDE, self.create_referral_create_name_uz)],
+                CREATE_REFERRAL_STATE: [MessageHandler(filters.TEXT & EXCLUDE, self.referral_menu),
+                                        MessageHandler(filters.Text(
+                                            [BACK]), self.referral_menu)
+                                        ],
+                REFERRAL_MENU: [
+                    MessageHandler(filters.Text([CREATE_REFERRAL_STATE]),
+                                   self.create_referral),
+                    MessageHandler(filters.TEXT & EXCLUDE,
+                                   self.referral_select_referral),
+
+                    MessageHandler(filters.Text([BACK]), self.start)
+                ],
             },
             fallbacks=[
                 CommandHandler('start', self.start),
@@ -86,10 +112,14 @@ class Bot:
             token).persistence(persistence).build()
         self.add_handlers()
 
-        daily_time = time(hour=8, minute=0)
+        # daily_time = time(hour=8, minute=0)
         # self.application.job_queue.run_daily(
         #     send_daily_currency_rates, time=daily_time
         # )
+
+        sync_currencies()
+
+        self.application.job_queue.run_repeating(self.sync_currencies, 300)
 
     async def store_message_id(self, update: Update, context: CallbackContext):
         if 'message_ids' not in context.user_data:
@@ -110,36 +140,43 @@ class Bot:
         context.user_data.clear()
         context.user_data['chat_id'] = update.message.from_user.id
 
-        referrer_chat_id = None
-        if context.args:
-            referrer_chat_id = context.args[0]
-
         await self.store_message_id(update, context)
 
-        referral_code = context.args[0] if context.args else None
+        ic("Salommmm")
 
-        if referral_code and referral_code in context.bot_data['referrals']:
-            context.bot_data['referrals'][referral_code]["join_count"] += 1
+        user, _ = User.objects.update_or_create(
+            chat_id=update.effective_user.id,
+            defaults=dict(
+                username=update.effective_user.username,
+                referral=Referral.objects.filter(
+                    code=context.args[0]).first() if context.args else None
+            )
+        )
 
-        try:
-            user = User.objects.get(chat_id=context.user_data['chat_id'])
-            await self.show_main_menu(update, context)
-            return SELECT_ACTION
-        except User.DoesNotExist:
-            if referrer_chat_id:
-                try:
-                    referrer = User.objects.get(chat_id=referrer_chat_id)
-                    context.user_data['referrer'] = referrer
-                except User.DoesNotExist:
-                    context.user_data['referrer'] = None
+        ic(user.name, user.phone_number,
+           user.name is None, user.phone_number is None)
 
-            await self.send_message(update, context, hi_reply, reply_markup=ReplyKeyboardRemove())
+        if user.name is None or user.phone_number is None:
+            await update.message.reply_text(hi_reply, parse_mode='HTML')
             return ASK_NAME
 
-    async def show_main_menu(self, update: Update, context: CallbackContext) -> int:
-        usd_currency = Currency.objects.filter(name=USD).first()
-        rub_currency = Currency.objects.filter(name=RUB).first()
-        eur_currency = Currency.objects.filter(name=EUR).first()
+        if user.is_admin:
+            # return await self.admin_menu(update,context)
+            await update.message.reply_text(
+                "<b>👤 ADMIN PANEL</b>",
+                reply_markup=ReplyKeyboardMarkup(
+                    [[BOT_STATS, USER_STATS], [POST_MESSAGE], [REFERRAL_MENU], [START], ], resize_keyboard=True),
+                parse_mode='HTML'
+            )
+            return ADMIN_MENU_STATE
+
+        return await self.show_main_menu(update, context)
+        # await self.send_message(update, context, hi_reply, reply_markup=ReplyKeyboardRemove())
+
+    async def show_main_menu(self, update: Update, context: CallbackContext):
+        usd_currency = Currency.objects.filter(currency_code="USD").first()
+        rub_currency = Currency.objects.filter(currency_code="RUB").first()
+        eur_currency = Currency.objects.filter(currency_code="EUR").first()
 
         usd_price = usd_currency.cb_price if usd_currency else "N/A"
         rub_price = rub_currency.cb_price if rub_currency else "N/A"
@@ -169,22 +206,17 @@ class Bot:
         )
         return SELECT_ACTION
 
-    async def check_command(self, update: Update, context: CallbackContext) -> bool:
-        command = update.message.text
-        if command == "/start":
-            await self.start(update, context)
-            return True
-        elif command == "/admin":
-            await self.admin_start(update, context)
-            return True
-        return False
-
     async def ask_name_wrong(self, update: Update, context: CallbackContext):
         await update.message.reply_text("Iltimos ismingizni to'g'ri kiriting!")
 
     async def ask_name(self, update: Update, context: CallbackContext) -> int:
 
-        context.user_data['name'] = update.message.text
+        # context.user_data['name'] = update.message.text
+        user = User.objects.get(chat_id=update.message.from_user.id)
+
+        user.name = update.message.text
+        user.save()
+
         button = KeyboardButton(
             text="Telefon raqamni ulashish 📞", request_contact=True)
         keyboard = ReplyKeyboardMarkup(
@@ -211,11 +243,19 @@ class Bot:
         if message == BACK:
             await self.send_message(update, context, hi_reply, reply_markup=ReplyKeyboardRemove())
             return ASK_NAME
+        user = User.objects.get(chat_id=update.message.from_user.id)
+
+        ic(user)
 
         if update.message.contact:
             phone_number = self.format_phone_number(
                 update.message.contact.phone_number)
-            context.user_data['phone'] = phone_number
+
+            user.phone_number = update.message.contact.phone_number
+            user.save()
+
+            ic(user, user.phone_number)
+
             await self.register_user(update, context)
             return SELECT_ACTION
 
@@ -227,7 +267,11 @@ class Bot:
                 await self.send_message(update, context, wrong_format_exception, reply_markup=to_ask_phone)
                 return ASK_PHONE
 
-            context.user_data['phone'] = phone_number
+            user.phone_number = update.message.text
+            user.save()
+
+            ic(user, user.phone_number)
+
             await self.register_user(update, context)
             return SELECT_ACTION
 
@@ -241,33 +285,12 @@ class Bot:
         return f'+{phone_number}'
 
     async def register_user(self, update: Update, context: CallbackContext) -> None:
-        chat_id = update.message.from_user.id
-        username = update.message.from_user.username
-        name = context.user_data['name']
-        phone = context.user_data['phone']
 
-        referrer = context.user_data.get('referrer')
-
-        if not User.objects.filter(chat_id=chat_id).exists():
-            new_user = User.objects.create(
-                chat_id=chat_id, name=name, username=username, phone_number=phone, referrer=referrer)
-
-            if referrer:
-                referrer.referral_count += 1
-                referrer.save()
-
-            await asyncio.sleep(2)
-            await self.show_main_menu(update, context)
-        else:
-            await self.send_message(update, context, "Siz allaqachon ro'yxatdan o'tgansiz✅")
-            await self.show_main_menu(update, context)
+        await self.show_main_menu(update, context)
 
     async def select_action(self, update: Update, context: CallbackContext) -> int:
         await self.store_message_id(update, context)
         action = update.message.text
-
-        if action == '/start':
-            return await self.start(update, context)
 
         if action == SHOW_OTHER_CURRENCIES:
             await self.show_other_currencies(update, context)
@@ -318,7 +341,7 @@ class Bot:
                                         reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
 
             return ENTER_AMOUNT
-        
+
         elif chosen_currency == BACK:
             await self.select_action
             return SELECT_ACTION
@@ -330,9 +353,9 @@ class Bot:
     async def show_other_currencies(self, update: Update, context: CallbackContext) -> int:
         await self.store_message_id(update, context)
 
-        if update.message.text == BACK:
-            await self.show_main_menu(update, context)
-            return SHOW_OTHER_CURRENCIES
+        # if update.message.text == BACK:
+            # await self.show_main_menu(update, context)
+            # return SHOW_OTHER_CURRENCIES
 
         other_currencies = Currency.objects.exclude(
             name__in=[USD, RUB, EUR]).values_list('name', flat=True)
@@ -393,7 +416,7 @@ class Bot:
 
         if conversion_direction == "to_uzs":
             converted_amount = round(amount * currency.cb_price, 2)
-            await self.send_message(update, context, f"{amount} {currency.name} ➡️ {converted_amount} {SUM} 🇺🇿".lower(), reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
+            await self.send_message(update, context, f"{amount} {currency.name} ➡️ {converted_amount} {SUM} 🇺🇿", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
         else:
             converted_amount = round(amount / currency.cb_price, 2)
             await self.send_message(update, context, f"{amount} {SUM} 🇺🇿  ➡️ {converted_amount} {currency.name}", reply_markup=ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
@@ -404,6 +427,12 @@ class Bot:
             user=user, currency=currency, amount=amount, direction=model_direction, convert_sum=converted_amount)
 
     async def admin_start(self, update: Update, context: CallbackContext) -> int:
+        user = User.objects.get(chat_id=update.message.from_user.id)
+
+        if user.is_admin:
+            # await update.message.reply_text("Yeb turib marama")
+            return await self.start(update, context)
+
         await update.message.reply_text("<b>Admin loginingizni kiriting: </b>", reply_markup=ReplyKeyboardRemove(), parse_mode='HTML')
         return ASK_ADMIN_LOGIN
 
@@ -418,13 +447,13 @@ class Bot:
         login = context.user_data.get('admin_login')
 
         if login == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-            await update.message.reply_text(
-                "<b>✅ Parol tasdiqlandi!\n\n👤 ADMIN PANEL </b>",
-                reply_markup=ReplyKeyboardMarkup(
-                    [[BOT_STATS, USER_STATS], [POST_MESSAGE], [REFERRAL_MENU], [START], ], resize_keyboard=True),
-                parse_mode='HTML'
-            )
-            return ADMIN_MENU_STATE
+
+            user = User.objects.get(chat_id=update.message.from_user.id)
+            user.is_admin = True
+            user.save()
+
+            return await self.start(update, context)
+
         await update.message.reply_text("<b>❌ Login yoki parol noto'g'ri. Qayta urinib ko'ring</b>", parse_mode='HTML')
 
         wrong_password_message = await update.message.reply_text("<b>Asosiy menyuga o'tilmoqda...</b>", parse_mode='HTML')
@@ -452,36 +481,23 @@ class Bot:
             await self.generate_user_statistics(update, context)
             return ADMIN_MENU_STATE
         elif action == START:
-            await self.show_main_menu(update, context)
-            return SELECT_ACTION
+            user = User.objects.get(chat_id=update.message.from_user.id)
+
+            user.is_admin = False
+            user.save()
+            return await self.start(update, context)
+            # await self.show_main_menu(update, context)
+            # return SELECT_ACTION
         elif action == POST_MESSAGE:
             await update.message.reply_text("📤 Yangi post yuboring:", reply_markup=ReplyKeyboardMarkup([[BACK]], one_time_keyboard=True, resize_keyboard=True))
             return POST_MESSAGE
         else:
             await update.message.reply_text(
-                "Noto'g'ri amal kiritdingiz❗️ \n\nIltimos quyidagi tugmalardan birini tanlang👇",
+                "Iltimos quyidagi tugmalardan birini tanlang👇",
                 reply_markup=admin_keyboard,
                 parse_mode='HTML'
             )
             return ADMIN_MENU_STATE
-
-    async def referral_menu(self, update: Update, context: CallbackContext) -> int:
-        action = update.message.text
-        referral_keyboard = ReplyKeyboardMarkup(
-            [[VIEW_REFERRALS], [CREATE_REFERRAL_STATE, DELETE_REFERRAL_STATE]],
-            resize_keyboard=True, one_time_keyboard=True
-        )
-        if action == VIEW_REFERRALS:
-            await self.view_referrals(update, context)
-            return REFERRAL_MENU
-        elif action == CREATE_REFERRAL_STATE:
-            await self.create_referral(update, context)
-            return REFERRAL_MENU
-        elif action == DELETE_REFERRAL_STATE:
-            await self.delete_referral(update, context)
-            return DELETE_REFERRAL_STATE
-        else:
-            await update.message.reply_text("Kerakli amaliyotni tanlang: ", reply_markup=referral_keyboard)
 
     async def handle_post(self, update: Update, context: CallbackContext) -> int:
         message = update.message
@@ -538,44 +554,157 @@ class Bot:
             await update.message.reply_text("Iltimos, ✅ Postni jo'natish yoki ❌ Bekor qilish dan birini tanlang.")
             return POST_CONFIRMATION
 
+    async def referral_menu(self, update: Update, context: CallbackContext) -> int:
+        action = update.message.text.strip()
+
+        if action == CREATE_REFERRAL_STATE:
+            return await self.create_referral(update, context)
+            # return REFERRAL_MENU
+
+        # elif action == BACK:
+        #     await self.admin_menu(update, context)
+        #     return ADMIN_MENU_STATE
+
+        # referrals = context.bot_data.get('referrals', {})
+        # if action in referrals:
+        #     context.user_data['selected_referral'] = action
+        #     await self.handle_selected_referral(update, context)
+        #     return REFERRAL_OPTIONS
+
+        # referral_keyboard = [[CREATE_REFERRAL_STATE]] + [[code]
+            #  for code in referrals.keys()] + [[BACK]]
+        # reply_markup = ReplyKeyboardMarkup(
+            # referral_keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+        # await update.message.reply_text("Select an option:", reply_markup=reply_markup)
+
+        await update.message.reply_text("🔖  Referrallar", reply_markup=ReplyKeyboardMarkup([
+            [CREATE_REFERRAL_STATE],
+            *distribute([referral.name for referral in Referral.objects.all()]),
+            [BACK]
+        ], resize_keyboard=True, one_time_keyboard=True))
+
+        return REFERRAL_MENU
+
+    async def referral_select_referral(self, update: Update, context: CallbackContext):
+
+        referral = Referral.objects.filter(name=update.message.text).first()
+
+        if referral is None:
+            await update.message.reply_text("REferral topilmadi.")
+            return await self.referral_menu(update, context)
+
+        context.user_data['selected_referral'] = referral.id
+
+        await update.message.reply_text("Kerakli amaliyotni tanlang 👇", reply_markup=ReplyKeyboardMarkup([
+            [
+                DELETE_REFERRAL_STATE,
+
+            ],
+            [
+                BACK
+            ]
+        ], resize_keyboard=True, one_time_keyboard=True))
+        return REFERRAL_OPTIONS
+
     async def create_referral(self, update: Update, context: CallbackContext):
-        self.initialize_bot_data()
 
-        referral_code = ''.join(random.choices(
-            string.ascii_uppercase + string.digits, k=6))
+        # referral_code = ''.join(random.choices(
+        #     string.ascii_uppercase + string.digits, k=6))
 
-        context.bot_data['referrals'][referral_code] = {
-            "join_count": 0
-        }
+        # if 'referrals' not in context.bot_data:
+        #     context.bot_data['referrals'] = {}
 
-        await update.message.reply_text(f"New referral code created: {referral_code}")
-        return REFERRAL_MENU
+        # context.bot_data['referrals'][referral_code] = {
+        #     "join_count": 0
+        # }
 
-    async def view_referrals(self, update: Update, context: CallbackContext):
-        if not context.bot_data.get('referrals'):
-            await update.message.reply_text("No active referrals.")
-            return REFERRAL_MENU
+        # bot_username = context.bot.username
+        # referral_link = f"https://t.me/{bot_username}?start={referral_code}"
 
-        message = "<b>Referallar:</b>\n"
-        for code, data in context.bot_data['referrals'].items():
-            message += f"Kod: {code} - Qo'shilgan foydalanuvchilar soni : {
-                data['join_count']}\n"
+        # await update.message.reply_text(f"New referral link created: {referral_link}")
+        # return REFERRAL_MENU
 
-        await update.message.reply_text(message, parse_mode="HTML")
-        return REFERRAL_MENU
+        await update.message.reply_text("Iltimos referralni nomini yuboring: ")
+        return REFERRAL_CREATE_NAME
 
-    async def delete_referral(self, update: Update, context: CallbackContext):
-        await update.message.reply_text("Referral kodni kiriting:")
-        return DELETE_REFERRAL_STATE
+    async def create_referral_create_name_uz(self, update: Update, context: CallbackContext):
 
-    async def confirm_delete_referral(self, update: Update, context: CallbackContext) -> int:
-        referral_code = update.message.text.strip()
-        if referral_code in context.bot_data['referrals']:
-            del context.bot_data['referrals'][referral_code]
-            await update.message.reply_text(f"Referral code {referral_code} deleted.")
-        else:
-            await update.message.reply_text("Referral code not found.")
-        return REFERRAL_MENU
+        Referral.objects.create(
+            name=update.message.text
+        )
+
+        await update.message.reply_text("✅ Referral yaratildi")
+
+        return await self.referral_menu(update, context)
+
+    # async def handle_selected_referral(self, update: Update, context: CallbackContext) -> int:
+
+    #     referral = Referral.objects.filter(name=update.message.text).first()
+
+    #     if referral is None:
+    #         await update.message.reply_text("Referral topilmadi", reply_markup=ReplyKeyboardMarkup([[BACK]], one_time_keyboard=True, resize_keyboard=True))
+    #         return REFERRAL_MENU
+
+    #     context.user_data['referral'] = referral.id
+
+    #     await update.message.reply_text(
+    #         f"Referral Code: {referral.name}\nJoin Count: {
+    #             referral.users.count()}",
+    #         reply_markup=ReplyKeyboardMarkup([
+    #             [
+    #                 [DELETE_REFERRAL_STATE]
+    #             ],
+    #             [BACK]
+    #         ])
+    #     )
+    #     if update.message.text == DELETE_REFERRAL_STATE:
+    #         await update.message.reply_text("Referral muvaffaqiyatli o'chirildi.")
+    #         return REFERRAL_MENU
+    #     return REFERRAL_MENU
+
+        # referrals = context.bot_data.get('referrals', {})
+        # referral_code = update.message.text.strip()
+
+        # referrals = context.bot_data.get('referrals', {})
+        # if referral_code in referrals:
+        #     context.user_data['selected_referral'] = referral_code
+
+        #     reply_markup = ReplyKeyboardMarkup(
+        #         [[DELETE_REFERRAL_STATE, BACK]],
+        #         resize_keyboard=True, one_time_keyboard=True
+        #     )
+        #     await update.message.reply_text(
+        #         f"Referral Code: {referral_code}\nJoin Count: {
+        #             referrals[referral_code]['join_count']}",
+        #         reply_markup=reply_markup
+        #     )
+        # return REFERRAL_OPTIONS
+        # elif referral_code == BACK:
+        # return await self.referral_menu(update, context)
+        # elif referral_code == DELETE_REFERRAL_STATE:
+        # await update.message.reply_text("Sizning tanlagan referralingiz muvaffaqiyatli o'chirib yuborildi !", reply_markup=ReplyKeyboardMarkup([[BACK]], one_time_keyboard=True, resize_keyboard=True))
+        # return REFERRAL_MENU
+        # else:
+        # await update.message.reply_text("Invalid option, please select from the menu.")
+        # return REFERRAL_MENU
+
+    async def delete_referral(self, update: Update, context: CallbackContext) -> int:
+        # referral_code = context.user_data.get('selected_referral')
+        # if referral_code and referral_code in context.bot_data['referrals']:
+        #     del context.bot_data['referrals'][referral_code]
+        #     await update.message.reply_text(f"Referral code {referral_code} deleted.")
+        # else:
+        #     await update.message.reply_text("Referral code not found.")
+
+        referral = Referral.objects.filter(
+            id=context.user_data['selected_referral']).first()
+
+        referral.delete()
+
+        await update.message.reply_text("Referral o'chirildi")
+
+        return await self.referral_menu(update, context)
 
     async def generate_bot_statistics(self, update: Update, context: CallbackContext):
         total_users = User.objects.count()
@@ -610,8 +739,7 @@ class Bot:
                     "username": (f"@{user.username}" if user.username else "N/A") if j == 1 else "",
                     "user_chat_id": user.chat_id if j == 1 else "",
                     "Telefon raqami": user.phone_number if j == 1 else "",
-                    "Eng kop foydalangan valyuta": user.favourite_currency,
-                    "Ro'yxatdan o'tgan sana": user.registered_at.strftime("%d.%m.%Y"),
+                    "Ro'yxatdan o'tgan sana": user.registered_at.strftime("%d.%m.%Y %H:%M:%S"),
                     "Valyutadan": conv.currency.name if conv.direction == "TO_UZS" else "O'zbek so'mi",
                     "Valyutaga": "O'zbek so'mi" if conv.direction == "TO_UZS" else conv.currency.name,
                     "Kurs narxi": conv.currency.cb_price,
@@ -639,3 +767,7 @@ class Bot:
 
     def run(self):
         self.application.run_polling()
+
+    async def sync_currencies(self, context: CallbackContext):
+
+        sync_currencies()

@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "currency",
     "user",
     "bot",
+    "referral",
     # "user_states",
 ]
 

@@ -1,10 +1,14 @@
 import re
-from telegram.ext.filters import MessageFilter
+from telegram.ext.filters import MessageFilter, Text
+
+from constants import BACK
+from icecream import ic
+
+# class ExcludeCommandsFilter(MessageFilter):
+#     def filter(self, message):
+#         res = not bool(re.match(rf"^(/start|/admin|{BACK})$", message.text))
+
+#         return ic(res)
 
 
-class ExcludeCommandsFilter(MessageFilter):
-    def filter(self, message):
-        return not bool(re.match(r"^/(start|admin)$", message.text))
-
-
-EXCLUDE = ExcludeCommandsFilter()
+EXCLUDE = ~Text(["/start", "/admin", BACK])
