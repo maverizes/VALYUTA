@@ -535,10 +535,10 @@ class Bot:
                     print(f"Error sending message to chat id {
                           chat_id}. Error: {e}")
             await update.message.reply_text("Post barcha foydalanuvchilarga muvaffaqiyatli jo'natildi ✅")
-            await update.message.reply_text("💼 Admin menu", reply_markup=ReplyKeyboardMarkup([[BOT_STATS], [USER_STATS], [START], [POST_MESSAGE]], resize_keyboard=True), parse_mode='HTML')
+            # await update.message.reply_text("💼 Admin menu", reply_markup=ReplyKeyboardMarkup([[BOT_STATS], [USER_STATS], [START], [POST_MESSAGE]], resize_keyboard=True), parse_mode='HTML')
 
             context.user_data.pop('pending_post', None)
-            return ADMIN_MENU_STATE
+            return await self.start(update,context)
 
         elif user_input == "❌ Bekor qilish":
             await update.message.reply_text("Postni jo'natish bekor qilindi ❌", )
