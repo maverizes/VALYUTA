@@ -22,6 +22,7 @@ import re
 
 from telegram.ext import PicklePersistence
 
+from telegram.ext import ContextTypes
 
 from icecream import ic
 
@@ -538,7 +539,7 @@ class Bot:
             # await update.message.reply_text("💼 Admin menu", reply_markup=ReplyKeyboardMarkup([[BOT_STATS], [USER_STATS], [START], [POST_MESSAGE]], resize_keyboard=True), parse_mode='HTML')
 
             context.user_data.pop('pending_post', None)
-            return await self.start(update,context)
+            return await self.start(update, context)
 
         elif user_input == "❌ Bekor qilish":
             await update.message.reply_text("Postni jo'natish bekor qilindi ❌", )
@@ -582,7 +583,7 @@ class Bot:
 
         return REFERRAL_MENU
 
-    async def referral_select_referral(self, update: Update, context: CallbackContext):
+    async def referral_select_referral(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         referral = Referral.objects.filter(name=update.message.text).first()
 
@@ -592,15 +593,21 @@ class Bot:
 
         context.user_data['selected_referral'] = referral.id
 
-        await update.message.reply_text("Kerakli amaliyotni tanlang 👇", reply_markup=ReplyKeyboardMarkup([
-            [
-                DELETE_REFERRAL_STATE,
+        await update.message.reply_text("Referral\n\n"
+                                        f"Nomi: {referral.name}\n"
+                                        f"Userlar soni: {
+                                            referral.users.count()}\n"
+                                        f"Link: https://t.me/{context.bot.username}?start={
+                                            referral.code}\n\n"
+                                        "Kerakli amaliyotni tanlang 👇", reply_markup=ReplyKeyboardMarkup([
+                                            [
+                                                DELETE_REFERRAL_STATE,
 
-            ],
-            [
-                BACK
-            ]
-        ], resize_keyboard=True, one_time_keyboard=True))
+                                            ],
+                                            [
+                                                BACK
+                                            ]
+                                        ], resize_keyboard=True, one_time_keyboard=True))
         return REFERRAL_OPTIONS
 
     async def create_referral(self, update: Update, context: CallbackContext):
