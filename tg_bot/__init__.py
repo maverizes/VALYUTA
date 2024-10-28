@@ -36,11 +36,11 @@ phone_reply = "<b>Hurmatli mijoz telefon raqamingizni jo'nating yoki pastdagi tu
 wrong_format_exception = "<b>Noto'g'ri formatdagi telefon raqam jo'natdingiz❗️\nTelefon raqam quyidagicha ko'rinishda bo'lishi kerak👇\n\n+998 xxx xxx xxx\n 998 xxx xxx xxx</b>"
 
 # Main menu buttons
-main_buttons = [
-    [f"{USD}"],
-    [f"{RUB}", f"{EUR}"],
-    [f"{SHOW_OTHER_CURRENCIES}"]
-]
+# main_buttons = [
+#     [f"{USD}"],
+#     [f"{RUB}", f"{EUR}"],
+#     [f"{SHOW_OTHER_CURRENCIES}"]
+# ]
 
 
 post_confirmation_button = [
@@ -201,7 +201,15 @@ class Bot:
         )
 
         keyboard = ReplyKeyboardMarkup(
-            main_buttons, one_time_keyboard=True, resize_keyboard=True
+            ReplyKeyboardMarkup([
+                [
+                    usd_currency.name,
+                    rub_currency.name
+                ],
+                [
+                    eur_currency.name
+                ]
+            ]), one_time_keyboard=True, resize_keyboard=True
         )
 
         user = User.objects.get(chat_id=update.message.from_user.id)
