@@ -57,13 +57,16 @@ class Bot:
             states={
                 ASK_NAME: [MessageHandler(filters.TEXT & EXCLUDE, self.ask_name),
                            MessageHandler(filters.ALL & EXCLUDE, self.ask_name_wrong)],
-                ASK_PHONE: [MessageHandler(filters.TEXT | filters.CONTACT, self.ask_phone)],
-                SELECT_ACTION: [MessageHandler(filters.TEXT & EXCLUDE, self.select_action)],
-                ENTER_AMOUNT: [MessageHandler(filters.TEXT & EXCLUDE, self.enter_amount)],
+                ASK_PHONE: [MessageHandler(filters.TEXT | filters.CONTACT, self.ask_phone), self.back(self.start)],
+                SELECT_ACTION: [MessageHandler(filters.TEXT & EXCLUDE, self.select_action),
+                                self.back(self.start)],
+                ENTER_AMOUNT: [MessageHandler(filters.TEXT & EXCLUDE, self.enter_amount),self.back(self.start)],
                 SHOW_OTHER_CURRENCIES: [
-                    MessageHandler(filters.TEXT & EXCLUDE, self.show_other_currencies),
-                    MessageHandler(filters.Text([BACK]),self.start)
-                    ],
+                    MessageHandler(filters.TEXT & EXCLUDE,
+                                   self.show_other_currencies),
+                    # MessageHandler(filters.Text([BACK]),self.start)
+                    self.back(self.start)
+                ],
                 ASK_ADMIN_LOGIN: [MessageHandler(filters.TEXT & EXCLUDE, self.ask_admin_login)],
                 ASK_ADMIN_PASSWORD: [MessageHandler(filters.TEXT & EXCLUDE, self.ask_admin_password)],
                 ADMIN_MENU_STATE: [MessageHandler(filters.TEXT & EXCLUDE, self.admin_menu)],
@@ -77,12 +80,12 @@ class Bot:
                 REFERRAL_OPTIONS: [
                     MessageHandler(filters.Text(
                         [DELETE_REFERRAL_STATE]), self.delete_referral),
-                    MessageHandler(filters.Text([BACK]), self.referral_menu)
+                    # MessageHandler(filters.Text([BACK]), self.referral_menu),
+                    self.back(self.referral_menu)
                 ],
                 REFERRAL_CREATE_NAME: [MessageHandler(filters.TEXT & EXCLUDE, self.create_referral_create_name_uz)],
                 CREATE_REFERRAL_STATE: [MessageHandler(filters.TEXT & EXCLUDE, self.referral_menu),
-                                        MessageHandler(filters.Text(
-                                            [BACK]), self.referral_menu)
+                                        self.back(self.referral_menu)
                                         ],
                 REFERRAL_MENU: [
                     MessageHandler(filters.Text([CREATE_REFERRAL_STATE]),
@@ -90,7 +93,8 @@ class Bot:
                     MessageHandler(filters.TEXT & EXCLUDE,
                                    self.referral_select_referral),
 
-                    MessageHandler(filters.Text([BACK]), self.start)
+                    # MessageHandler(filters.Text([BACK]), self.start)
+                    self.back(self.start)
                 ],
             },
             fallbacks=[
@@ -135,6 +139,11 @@ class Bot:
         if 'message_ids' not in context.user_data:
             context.user_data['message_ids'] = []
         context.user_data['message_ids'].append(message.message_id)
+
+    def back(self, callback) -> MessageHandler:
+        return MessageHandler(
+            filters.Text(BACK), callback
+        )
 
     async def start(self, update: Update, context: CallbackContext) -> int:
         context.user_data.clear()
@@ -354,8 +363,8 @@ class Bot:
         await self.store_message_id(update, context)
 
         # if update.message.text == BACK:
-            # await self.show_main_menu(update, context)
-            # return SHOW_OTHER_CURRENCIES
+        # await self.show_main_menu(update, context)
+        # return SHOW_OTHER_CURRENCIES
 
         other_currencies = Currency.objects.exclude(
             name__in=[USD, RUB, EUR]).values_list('name', flat=True)
