@@ -1,7 +1,7 @@
 from constants import *
 from currency.models import Currency
 from user.models import User
-from telegram.ext import  ContextTypes
+from telegram.ext import ContextTypes
 
 import requests
 from currency.models import Currency
@@ -36,6 +36,13 @@ async def send_daily_currency_rates(context: ContextTypes.DEFAULT_TYPE):
             print(f"Failed to send message to {chat_id}: {str(e)}")
 
 
+CURRS = {
+    "USD": USD,
+    "RUB": RUB,
+    "EUR": EUR
+}
+
+
 def sync_currencies():
     url = "https://nbu.uz/uz/exchange-rates/json/"
 
@@ -54,7 +61,7 @@ def sync_currencies():
                 currency, created = Currency.objects.update_or_create(
                     currency_code=code,
                     defaults={
-                        "name": name,
+                        "name": CURRS.get(code, name),
                         "cb_price": cb_price,
                     }
                 )
