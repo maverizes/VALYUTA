@@ -59,8 +59,7 @@ class Bot:
                            MessageHandler(filters.ALL & EXCLUDE, self.ask_name_wrong)],
                 ASK_PHONE: [MessageHandler(filters.TEXT | filters.CONTACT, self.ask_phone), self.back(self.start)],
                 SELECT_ACTION: [
-                    MessageHandler(filters.Text(
-                        [SHOW_OTHER_CURRENCIES]), self.show_other_currencies),
+
                     MessageHandler(filters.TEXT & EXCLUDE, self.select_action),
                     self.back(self.start)],
                 ENTER_AMOUNT: [MessageHandler(filters.TEXT & EXCLUDE, self.enter_amount), self.back(self.back_from_amount)],
@@ -101,6 +100,8 @@ class Bot:
                 ],
 
                 SELECT_CURRENCY: [
+                    MessageHandler(filters.Text(
+                        [SHOW_OTHER_CURRENCIES]), self.show_other_currencies),
                     MessageHandler(filters.TEXT & EXCLUDE,
                                    self.select_currency),
                     self.back(self.start)
@@ -355,7 +356,8 @@ class Bot:
             else:
                 context.user_data['conversion_direction'] = "from_uzs"
 
-            chosen_currency = Currency.objects.filter(id=context.user_data.get('currency')).first()
+            chosen_currency = Currency.objects.filter(
+                id=context.user_data.get('currency')).first()
             conversion_direction = context.user_data.get(
                 'conversion_direction')
 
@@ -405,7 +407,6 @@ class Bot:
         if update.message.text == '/start':
             return await self.start(update, context)
 
-
         await self.store_message_id(update, context)
 
         try:
@@ -414,7 +415,8 @@ class Bot:
             await self.send_message(update, context, "Iltimos, to'g'ri miqdorni kiriting.", ReplyKeyboardMarkup([[BACK]], resize_keyboard=True, one_time_keyboard=True))
             return ENTER_AMOUNT
 
-        currency = Currency.objects.filter(id=context.user_data['currency']).first()
+        currency = Currency.objects.filter(
+            id=context.user_data['currency']).first()
         conversion_direction = context.user_data.get('conversion_direction')
 
         if conversion_direction not in ["to_uzs", "from_uzs"]:
