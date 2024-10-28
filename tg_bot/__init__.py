@@ -62,8 +62,8 @@ class Bot:
                     MessageHandler(filters.Text(
                         [SHOW_OTHER_CURRENCIES]), self.show_other_currencies),
                     MessageHandler(filters.TEXT & EXCLUDE, self.select_action),
-                    self.back(self.show_other_currencies)],
-                ENTER_AMOUNT: [MessageHandler(filters.TEXT & EXCLUDE, self.enter_amount), self.back(self.start)],
+                    self.back(self.start)],
+                ENTER_AMOUNT: [MessageHandler(filters.TEXT & EXCLUDE, self.enter_amount), self.back(self.back_from_amount)],
                 SHOW_OTHER_CURRENCIES: [
                     MessageHandler(filters.TEXT & EXCLUDE,
                                    self.show_other_currencies),
@@ -804,3 +804,27 @@ class Bot:
     async def sync_currencies(self, context: CallbackContext):
 
         sync_currencies()
+
+    async def back_from_amount(self, update: Update, context: CallbackContext):
+
+        chosen_currency = Currency.objects.filter(
+            name=update.message.text).first()
+
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        currency_info_message = (
+            f"<b>🌍{current_time} vaqtiga ko'ra hozir\n\n"
+            f"{chosen_currency.name} ning narxi: {
+                chosen_currency.cb_price} {UZS}\n </b>"
+        )
+        await self.send_message(update, context, currency_info_message)
+
+        conversion_buttons = [
+            [f"{chosen_currency.name} → {UZS}"],
+            [f"{UZS} → {chosen_currency.name}"],
+            [BACK]
+        ]
+        keyboard = ReplyKeyboardMarkup(
+            conversion_buttons, one_time_keyboard=True, resize_keyboard=True)
+
+        await self.send_message(update, context, "<b>Pastdagi tugmalardan kerakli amaliyotni tanlang👇 </b>", reply_markup=keyboard)
+        return SELECT_ACTION
