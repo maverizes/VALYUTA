@@ -48,27 +48,29 @@ def sync_currencies():
 
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raise an error for bad status codes
+        response.raise_for_status()  
         currency_data = response.json()
 
         for item in currency_data:
             code = item.get("code")
-            cb_price = item.get("")
+            cb_price = item.get("nbu_cell_price")
             name = item.get("title")
 
-            if code and cb_price:
-                # Sync or create the currency entry in the database
-                currency, created = Currency.objects.update_or_create(
-                    currency_code=code,
-                    defaults={
-                        "name": CURRS.get(code, name),
-                        "cb_price": cb_price,
-                    }
-                )
-                if created:
-                    print(f"Created new currency: {currency}")
-                else:
-                    print(f"Updated currency: {currency}")
+            if not cb_price or not code:
+                continue
+
+            currency, created = Currency.objects.update_or_create(
+                currency_code=code,
+                defaults={
+                    "name": CURRS.get(code, name),
+                    "cb_price": cb_price,
+                }
+            )
+            if created:
+                print(f"Created new currency: {currency}")
+            else:
+                print(f"Updated currency: {currency}")
+
 
     except requests.RequestException as e:
         print(f"Error fetching currency data: {e}")
