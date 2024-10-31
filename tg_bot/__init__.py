@@ -1,5 +1,6 @@
 import random
 import string
+import pytz
 from telegram.ext.filters import MessageFilter
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
@@ -127,10 +128,12 @@ class Bot:
             token).persistence(persistence).build()
         self.add_handlers()
 
-        # daily_time = time(hour=8, minute=0)
-        # self.application.job_queue.run_daily(
-        #     send_daily_currency_rates, time=daily_time
-        # )
+        uzbekistan_time = pytz.timezone("Asia/Tashkent")
+        daily_time = time(hour=DAILY_TIME_HOUR, minute=DAILY_TIME_MINUTE, tzinfo=uzbekistan_time)
+
+        self.application.job_queue.run_daily(
+            send_daily_currency_rates, time=daily_time
+        )
 
         sync_currencies()
 
