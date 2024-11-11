@@ -228,7 +228,7 @@ class Bot:
         user = User.objects.get(chat_id=update.message.from_user.id)
 
         message_text = (
-            f"Assalomu alaykum. Men <b>Valyutachi botman<b/> 😊\nMen orqali siz <b>milliy so'mni boshqa valyutalarga</b> o'girishingiz mumkin.<b>\n-Valyuta kurslari NBU kursi bo'yicha kunlik kurslar o'zgaradi</b>\nBot asosan valyutani tezkor hisob-kitob qilish uchun yaratilgan"
+            f"Assalomu alaykum. Men <b>Valyutachi botman<b/> 😊\nMen orqali siz <b>milliy so'mni boshqa valyutalargao'girishingiz mumkin.\n-Valyuta kurslari NBU kursi bo'yicha kunlik kurslar o'zgaradi\nBot asosan valyutani tezkor hisob-kitob qilish uchun yaratilgan"
             f"<b>Assalomu alaykum {user.name} !\n"
             f"Sizni Dollarchi botimizda ko'rib turganimizdan xursandmiz😊\n\n"
             f"{currency_rates_message}\n\n"
