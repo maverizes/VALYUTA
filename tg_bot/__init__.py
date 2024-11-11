@@ -33,7 +33,7 @@ ic.configureOutput(
 )
 
 # Start REPLY
-hi_reply = "<b>Botdan foydalanishdan oldin ro'yhatdan o'tishingiz kerak!\nIltimos ismingizni kiriting 👇</b>"
+hi_reply = "<b>Botdan foydalanishdan oldin ro'yhatdan o'tishingiz kerak!Iltimos ismingizni kiriting 👇</b>"
 phone_reply = "<b>Hurmatli mijoz telefon raqamingizni jo'nating yoki pastdagi tugmani bosing📱</b>"
 wrong_format_exception = "<b>Noto'g'ri formatdagi telefon raqam jo'natdingiz❗️\nTelefon raqam quyidagicha ko'rinishda bo'lishi kerak👇\n\n+998 xxx xxx xxx\n 998 xxx xxx xxx</b>"
 
@@ -228,13 +228,11 @@ class Bot:
         user = User.objects.get(chat_id=update.message.from_user.id)
 
         message_text = (
-            f"Assalomu alaykum. Men <b>Valyutachi botman<b/> 😊\nMen orqali siz <b>milliy so'mni boshqa valyutalargao'girishingiz mumkin.\n-Valyuta kurslari NBU kursi bo'yicha kunlik kurslar o'zgaradi\nBot asosan valyutani tezkor hisob-kitob qilish uchun yaratilgan"
             f"<b>Assalomu alaykum {user.name} !\n"
             f"Sizni Dollarchi botimizda ko'rib turganimizdan xursandmiz😊\n\n"
             f"{currency_rates_message}\n\n"
-            f"Kerakli valyutani tanlang👇</b>\n\n"
+            f"Kerakli amaliyotni tanlang👇</b>\n\n"
         )
-        
 
         await self.send_message(
             update, context, message_text, reply_markup=keyboard
