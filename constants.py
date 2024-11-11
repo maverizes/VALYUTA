@@ -25,7 +25,7 @@ USD = "🇺🇸Dollar"
 RUB = "🇷🇺Rubl"
 EUR = "🇪🇺Yevro"
 
-SUM="So'm"
+SUM="so'm"
 
 
 ADMIN_USERNAME = 'admin'
